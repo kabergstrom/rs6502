@@ -4,28 +4,30 @@ use std::collections::HashMap;
 use std::fmt::Display;
 use std::path::Path;
 
-use ::opcodes::{AddressingMode, OpCode};
 use assembler::lexer::{Lexer, LexerError};
 use assembler::parser::{Parser, ParserError};
 use assembler::token::{LexerToken, ParserToken};
+use opcodes::{AddressingMode, OpCode};
 
 #[derive(Debug, PartialEq)]
 pub struct Label(u16);
 
 #[derive(Debug)]
 pub struct AssemblerError {
-    message: String,
+    pub message: String,
 }
 
 impl AssemblerError {
     fn unknown_label<S>(label: S) -> AssemblerError
-        where S: Into<String> + std::fmt::Display
+    where
+        S: Into<String> + std::fmt::Display,
     {
         AssemblerError::from(format!("Unknown label: '{}'", label))
     }
 
     fn relative_offset_too_large<S>(context: S) -> AssemblerError
-        where S: Into<String> + Display
+    where
+        S: Into<String> + Display,
     {
         AssemblerError::from(format!("Branch too far: {}", context))
     }
@@ -39,13 +41,17 @@ impl From<String> for AssemblerError {
 
 impl From<LexerError> for AssemblerError {
     fn from(error: LexerError) -> AssemblerError {
-        AssemblerError { message: error.message }
+        AssemblerError {
+            message: error.message,
+        }
     }
 }
 
 impl From<ParserError> for AssemblerError {
     fn from(error: ParserError) -> AssemblerError {
-        AssemblerError { message: error.message }
+        AssemblerError {
+            message: error.message,
+        }
     }
 }
 
@@ -61,15 +67,19 @@ pub struct Assembler {
 
 impl Assembler {
     pub fn new() -> Assembler {
-        Assembler { symbol_table: HashMap::new() }
+        Assembler {
+            symbol_table: HashMap::new(),
+        }
     }
 
-    pub fn assemble_string<S, O>(&mut self,
-                                 code: S,
-                                 offset: O)
-                                 -> Result<Vec<CodeSegment>, AssemblerError>
-        where S: Into<String>,
-              O: Into<Option<u16>>
+    pub fn assemble_string<S, O>(
+        &mut self,
+        code: S,
+        offset: O,
+    ) -> Result<Vec<CodeSegment>, AssemblerError>
+    where
+        S: Into<String>,
+        O: Into<Option<u16>>,
     {
         let code = code.into();
         let mut lexer = Lexer::new();
@@ -80,12 +90,14 @@ impl Assembler {
         Ok(self.assemble(tokens, offset)?)
     }
 
-    pub fn assemble_file<P, O>(&mut self,
-                               path: P,
-                               offset: O)
-                               -> Result<Vec<CodeSegment>, AssemblerError>
-        where P: AsRef<Path>,
-              O: Into<Option<u16>>
+    pub fn assemble_file<P, O>(
+        &mut self,
+        path: P,
+        offset: O,
+    ) -> Result<Vec<CodeSegment>, AssemblerError>
+    where
+        P: AsRef<Path>,
+        O: Into<Option<u16>>,
     {
         let mut lexer = Lexer::new();
         let tokens = lexer.lex_file(path)?;
@@ -95,11 +107,13 @@ impl Assembler {
         Ok(self.assemble(tokens, offset)?)
     }
 
-    fn assemble<O>(&mut self,
-                   tokens: Vec<ParserToken>,
-                   offset: O)
-                   -> Result<Vec<CodeSegment>, AssemblerError>
-        where O: Into<Option<u16>>
+    fn assemble<O>(
+        &mut self,
+        tokens: Vec<ParserToken>,
+        offset: O,
+    ) -> Result<Vec<CodeSegment>, AssemblerError>
+    where
+        O: Into<Option<u16>>,
     {
         let mut addr: u16 = offset.into().unwrap_or(0);
 
@@ -153,13 +167,19 @@ impl Assembler {
                         if addr > label_addr {
                             let distance = (label_addr as i16 - addr as i16) as i8;
                             if distance < -128 || distance > 127 {
-                                return Err(AssemblerError::relative_offset_too_large(format!("Attempted jump to {} at {:04X}", label, addr)));
+                                return Err(AssemblerError::relative_offset_too_large(format!(
+                                    "Attempted jump to {} at {:04X}",
+                                    label, addr
+                                )));
                             }
                             current_segment.code.push(distance as u8);
                         } else {
                             let distance = label_addr - addr;
                             if distance > 127 {
-                                return Err(AssemblerError::relative_offset_too_large(format!("Attempted jump to {} at {:04X}", label, addr)));
+                                return Err(AssemblerError::relative_offset_too_large(format!(
+                                    "Attempted jump to {} at {:04X}",
+                                    label, addr
+                                )));
                             }
                             current_segment.code.push(distance as u8);
                         }
@@ -204,10 +224,13 @@ mod tests {
     #[test]
     fn can_assemble_basic_code() {
         let mut assembler = Assembler::new();
-        let segments = assembler.assemble_string("
+        let segments = assembler
+            .assemble_string(
+                "
             LDA $4400
         ",
-                             None)
+                None,
+            )
             .unwrap();
 
         assert_eq!(&[0xAD, 0x00, 0x44], &segments[0].code[..]);
@@ -216,61 +239,79 @@ mod tests {
     #[test]
     fn can_jump_to_label_behind() {
         let mut assembler = Assembler::new();
-        let segments = assembler.assemble_string("
+        let segments = assembler
+            .assemble_string(
+                "
             MAIN LDA $4400
             PHA
             JMP MAIN
         ",
-                             None)
+                None,
+            )
             .unwrap();
 
-        assert_eq!(&[0xAD, 0x00, 0x44, 0x48, 0x4C, 0x00, 0x00],
-                   &segments[0].code[..]);
+        assert_eq!(
+            &[0xAD, 0x00, 0x44, 0x48, 0x4C, 0x00, 0x00],
+            &segments[0].code[..]
+        );
     }
 
     #[test]
     fn can_jump_to_label_with_colon_behind() {
         let mut assembler = Assembler::new();
-        let segments = assembler.assemble_string("
+        let segments = assembler
+            .assemble_string(
+                "
             MAIN:
                 LDA $4400
                 PHA
                 JMP MAIN
         ",
-                             None)
+                None,
+            )
             .unwrap();
 
-        assert_eq!(&[0xAD, 0x00, 0x44, 0x48, 0x4C, 0x00, 0x00],
-                   &segments[0].code[..]);
+        assert_eq!(
+            &[0xAD, 0x00, 0x44, 0x48, 0x4C, 0x00, 0x00],
+            &segments[0].code[..]
+        );
     }
 
     #[test]
     fn can_jump_to_label_ahead() {
         let mut assembler = Assembler::new();
-        let segments = assembler.assemble_string("
+        let segments = assembler
+            .assemble_string(
+                "
             JMP MAIN
             PHA
             LDX #15
             MAIN LDA $4400
             RTS
         ",
-                             None)
+                None,
+            )
             .unwrap();
 
-        assert_eq!(&[0x4C, 0x06, 0x00, 0x48, 0xA2, 0x0F, 0xAD, 0x00, 0x44, 0x60],
-                   &segments[0].code[..]);
+        assert_eq!(
+            &[0x4C, 0x06, 0x00, 0x48, 0xA2, 0x0F, 0xAD, 0x00, 0x44, 0x60],
+            &segments[0].code[..]
+        );
     }
 
     #[test]
     fn can_use_variables() {
         let mut assembler = Assembler::new();
-        let segments = assembler.assemble_string("
+        let segments = assembler
+            .assemble_string(
+                "
             MAIN_ADDRESS = $0000
             MAIN:
             LDX #15
             JMP MAIN_ADDRESS
         ",
-                             None)
+                None,
+            )
             .unwrap();
 
         assert_eq!(&[0xA2, 0x0F, 0x4C, 0x00, 0x00], &segments[0].code[..]);
@@ -279,7 +320,9 @@ mod tests {
     #[test]
     fn can_use_variables_assigned_to_variables() {
         let mut assembler = Assembler::new();
-        let segments = assembler.assemble_string("
+        let segments = assembler
+            .assemble_string(
+                "
             MAIN_ADDRESS = $0000
             MAIN_ADDRESS_INDIRECT_ONE = MAIN_ADDRESS
             MAIN_ADDRESS_INDIRECT_TWO = MAIN_ADDRESS_INDIRECT_ONE
@@ -287,7 +330,8 @@ mod tests {
             LDX #15
             JMP MAIN_ADDRESS_INDIRECT_TWO
         ",
-                             None)
+                None,
+            )
             .unwrap();
 
         assert_eq!(&[0xA2, 0x0F, 0x4C, 0x00, 0x00], &segments[0].code[..]);
@@ -296,7 +340,9 @@ mod tests {
     #[test]
     fn can_assemble_clearmem_implementation() {
         let mut assembler = Assembler::new();
-        let segments = assembler.assemble_string("
+        let segments = assembler
+            .assemble_string(
+                "
             CLRMEM  LDA #$00
                     TAY             
             CLRM1   STA ($FF),Y
@@ -305,17 +351,22 @@ mod tests {
                     BNE CLRM1       
                     RTS             
         ",
-                             None)
+                None,
+            )
             .unwrap();
 
-        assert_eq!(&[0xA9, 0x00, 0xA8, 0x91, 0xFF, 0xC8, 0xCA, 0xD0, 0xFA, 0x60],
-                   &segments[0].code[..]);
+        assert_eq!(
+            &[0xA9, 0x00, 0xA8, 0x91, 0xFF, 0xC8, 0xCA, 0xD0, 0xFA, 0x60],
+            &segments[0].code[..]
+        );
     }
 
     #[test]
     fn can_assemble_clearmem_implementation_that_jumps_forward_and_is_lowercase() {
         let mut assembler = Assembler::new();
-        let segments = assembler.assemble_string("
+        let segments = assembler
+            .assemble_string(
+                "
             jmp     clrmem
             lda     #$00
             beq     clrm1
@@ -330,18 +381,25 @@ mod tests {
                     tay             
             jmp     clrm1
         ",
-                             None)
+                None,
+            )
             .unwrap();
 
-        assert_eq!(&[0x4C, 0x10, 0x00, 0xA9, 0x00, 0xF0, 0x02, 0xEA, 0xEA, 0x91, 0xFF, 0xC8,
-                     0xCA, 0xD0, 0xFA, 0x60, 0xA9, 0x00, 0xA8, 0x4C, 0x09, 0x00],
-                   &segments[0].code[..]);
+        assert_eq!(
+            &[
+                0x4C, 0x10, 0x00, 0xA9, 0x00, 0xF0, 0x02, 0xEA, 0xEA, 0x91, 0xFF, 0xC8, 0xCA, 0xD0,
+                0xFA, 0x60, 0xA9, 0x00, 0xA8, 0x4C, 0x09, 0x00
+            ],
+            &segments[0].code[..]
+        );
     }
 
     #[test]
     fn can_assemble_clearmem_implementation_that_jumps_forward() {
         let mut assembler = Assembler::new();
-        let segments = assembler.assemble_string("
+        let segments = assembler
+            .assemble_string(
+                "
             JMP     CLRMEM
             LDA     #$00
             BEQ     CLRM1
@@ -357,24 +415,32 @@ mod tests {
                     TAY             
             JMP     CLRM1
         ",
-                             None)
+                None,
+            )
             .unwrap();
 
-        assert_eq!(&[0x4C, 0x11, 0x00, 0xA9, 0x00, 0xF0, 0x03, 0xEA, 0xEA, 0x00, 0x91, 0xFF,
-                     0xC8, 0xCA, 0xD0, 0xFA, 0x60, 0xA9, 0x00, 0xA8, 0x4C, 0x0A, 0x00],
-                   &segments[0].code[..]);
+        assert_eq!(
+            &[
+                0x4C, 0x11, 0x00, 0xA9, 0x00, 0xF0, 0x03, 0xEA, 0xEA, 0x00, 0x91, 0xFF, 0xC8, 0xCA,
+                0xD0, 0xFA, 0x60, 0xA9, 0x00, 0xA8, 0x4C, 0x0A, 0x00
+            ],
+            &segments[0].code[..]
+        );
     }
 
     #[test]
     fn can_use_variables_for_indirect_addressing() {
         let mut assembler = Assembler::new();
-        let segments = assembler.assemble_string("
+        let segments = assembler
+            .assemble_string(
+                "
             MAIN_ADDRESS = $0000
             MAIN:
             LDX #15
             LDA (MAIN_ADDRESS),Y
         ",
-                             None)
+                None,
+            )
             .unwrap();
 
         assert_eq!(&[0xA2, 0x0F, 0xB1, 0x00, 0x00], &segments[0].code[..]);
@@ -383,7 +449,9 @@ mod tests {
     #[test]
     fn can_assign_code_segments_to_different_memory_addresses() {
         let mut assembler = Assembler::new();
-        let segments = assembler.assemble_string("
+        let segments = assembler
+            .assemble_string(
+                "
             .ORG $C000
             LDA #$FF
             STA $2000
@@ -392,7 +460,8 @@ mod tests {
             LDA #$AA
             STA $2001
         ",
-                             None)
+                None,
+            )
             .unwrap();
 
         assert_eq!(0xC000, segments[0].address);
@@ -402,7 +471,9 @@ mod tests {
     #[test]
     fn can_jump_between_code_segments() {
         let mut assembler = Assembler::new();
-        let segments = assembler.assemble_string("
+        let segments = assembler
+            .assemble_string(
+                "
             .ORG $C000
             JMP CALLBACK
 
@@ -413,7 +484,8 @@ mod tests {
             CALLBACK
             LDX #$0A
         ",
-                             None)
+                None,
+            )
             .unwrap();
 
         assert_eq!(0xC000, segments[0].address);
@@ -426,12 +498,15 @@ mod tests {
     #[test]
     fn can_dump_raw_bytes() {
         let mut assembler = Assembler::new();
-        let segments = assembler.assemble_string("
+        let segments = assembler
+            .assemble_string(
+                "
             .ORG $C000
 
             .BYTE #$40, #10, #$0A
         ",
-                             None)
+                None,
+            )
             .unwrap();
 
         assert_eq!(&[64, 10, 10], &segments[0].code[..]);
@@ -440,12 +515,15 @@ mod tests {
     #[test]
     fn can_dump_single_raw_byte() {
         let mut assembler = Assembler::new();
-        let segments = assembler.assemble_string("
+        let segments = assembler
+            .assemble_string(
+                "
             .ORG $C000
 
             .BYTE #$FF
         ",
-                             None)
+                None,
+            )
             .unwrap();
 
         assert_eq!(&[255], &segments[0].code[..]);
@@ -454,7 +532,9 @@ mod tests {
     #[test]
     fn can_dump_bytes_with_other_code() {
         let mut assembler = Assembler::new();
-        let segments = assembler.assemble_string("
+        let segments = assembler
+            .assemble_string(
+                "
             .ORG $C000
             JMP CALLBACK
             .BYTE #$0A
@@ -467,7 +547,8 @@ mod tests {
             CALLBACK
             LDX #$0A
         ",
-                             None)
+                None,
+            )
             .unwrap();
 
         assert_eq!(0x0A, segments[0].code[3]);
